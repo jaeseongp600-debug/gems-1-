@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>GEMS 로그인</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1117;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  background-image:radial-gradient(ellipse at 20% 50%,rgba(34,197,94,.06) 0%,transparent 60%),
+    radial-gradient(ellipse at 80% 20%,rgba(59,130,246,.06) 0%,transparent 60%)}
+.card{background:#1a1f2e;border:1px solid #2d3448;border-radius:16px;padding:44px 40px;width:100%;max-width:420px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.logo{text-align:center;margin-bottom:36px}
+.logo-ring{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#22c55e,#16a34a);
+  display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 14px;
+  box-shadow:0 0 24px rgba(34,197,94,.35)}
+.logo h1{font-size:24px;font-weight:700;letter-spacing:.03em}
+.logo p{font-size:13px;color:#64748b;margin-top:4px}
+.form-group{margin-bottom:18px}
+label{display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:7px;letter-spacing:.05em;text-transform:uppercase}
+input[type=text],input[type=password]{
+  width:100%;padding:12px 14px;background:#0f1117;border:1px solid #2d3448;
+  border-radius:9px;color:#e2e8f0;font-size:14px;outline:none;transition:.2s}
+input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#22c55e,#16a34a);
+  border:none;border-radius:9px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;
+  margin-top:8px;transition:.2s;letter-spacing:.03em}
+.btn-login:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(34,197,94,.4)}
+.error{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);border-radius:8px;
+  padding:11px 14px;font-size:13px;color:#f87171;margin-bottom:18px}
+.hint{margin-top:24px;padding:14px;background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.18);
+  border-radius:9px;font-size:12px;color:#64748b;line-height:1.8}
+.hint b{color:#93c5fd}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-ring">⚡</div>
+    <h1>GEMS</h1>
+    <p>발전기 에너지 관리 시스템</p>
+  </div>
+  {% if error %}
+  <div class="error">⚠ {{ error }}</div>
+  {% endif %}
+  <form method="post">
+    <div class="form-group">
+      <label>아이디</label>
+      <input type="text" name="username" placeholder="아이디 입력" autofocus required>
+    </div>
+    <div class="form-group">
+      <label>비밀번호</label>
+      <input type="password" name="password" placeholder="비밀번호 입력" required>
+    </div>
+    <button type="submit" class="btn-login">로그인</button>
+  </form>
+  <div class="hint">
+    <b>테스트 계정</b><br>
+    admin / 1234 &nbsp;·&nbsp; GEN-001, GEN-002<br>
+    operator / gems2024 &nbsp;·&nbsp; GEN-003, GEN-004<br>
+    viewer / view1234 &nbsp;·&nbsp; GEN-005, GEN-006
+  </div>
+</div>
+</body>
+</html>

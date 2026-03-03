@@ -1,0 +1,398 @@
+{% extends 'base.html' %}
+{% block title %}설정{% endblock %}
+{% block title_bar %}⚙ 시스템 설정{% endblock %}
+
+{% block content %}
+{% if msg %}
+<div style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:9px;
+  padding:12px 16px;font-size:13px;color:var(--green);margin-bottom:20px">✅ {{ msg }}</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+
+  <!-- ─ 목표 피크량 설정 ─ -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:18px">🎯 목표 피크량 설정</div>
+    <form method="post">
+      <input type="hidden" name="action" value="peak">
+
+      <!-- 발전기 선택 -->
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;
+        text-transform:uppercase;letter-spacing:.05em">적용 대상 발전기</label>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap" id="genSelector">
+        {% for gid in user_gens %}
+        <label style="display:flex;align-items:center;gap:6px;background:#0f1117;border:1px solid var(--border);
+          border-radius:8px;padding:8px 14px;cursor:pointer;font-size:13px;transition:.2s"
+          id="lbl-{{ gid }}">
+          <input type="radio" name="sel_gen" value="{{ gid }}"
+            {% if loop.first %}checked{% endif %}
+            onchange="onGenChange()"
+            style="accent-color:#3b82f6">
+          <span>{{ gen_names[gid] }}</span>
+          <span style="color:var(--muted);font-size:11px">({{ gid }})</span>
+        </label>
+        {% endfor %}
+      </div>
+
+      <!-- 병렬 모드 -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;
+        background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.18);
+        border-radius:8px;padding:10px 14px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" name="parallel" id="parallelChk" onchange="onParallelChange()"
+            style="width:16px;height:16px;accent-color:#3b82f6">
+          <span style="font-weight:600;color:#93c5fd">🔗 병렬 모드</span>
+        </label>
+        <span style="font-size:11px;color:var(--muted)">— 체크 시 두 발전기에 동일한 값이 적용됩니다</span>
+      </div>
+
+      <!-- 현재 설정값 표시 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        {% for gid in user_gens %}
+        <div style="background:#0f1117;border:1px solid var(--border);border-radius:8px;padding:10px 12px" id="cur-{{ gid }}">
+          <div style="font-size:10px;color:var(--muted);margin-bottom:4px">{{ gen_names[gid] }}</div>
+          <div style="font-size:18px;font-weight:700;color:#e2e8f0" id="curval-{{ gid }}">{{ gen_targets[gid] }}</div>
+          <div style="font-size:11px;color:var(--muted)">kW</div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:7px;
+        text-transform:uppercase;letter-spacing:.05em">새 목표 피크전력 (kW)</label>
+      <input type="number" name="target_peak" id="targetPeakInput"
+        value="{{ gen_targets[user_gens[0]] if user_gens else 800 }}"
+        min="100" max="9999" step="50"
+        style="width:100%;padding:12px;background:#0f1117;border:1px solid var(--border);border-radius:8px;
+               color:var(--text);font-size:20px;font-weight:700;outline:none;margin-bottom:12px;
+               box-sizing:border-box">
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        {% for v in [400,500,600,700,800,900,1000] %}
+        <button type="button" class="btn" style="padding:5px 12px;font-size:12px"
+          onclick="document.getElementById('targetPeakInput').value={{ v }}">{{ v }}</button>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%">💾 저장</button>
+    </form>
+  </div>
+
+  <!-- ─ 계정 정보 + 알람 설정 ─ -->
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:18px">👤 계정 정보</div>
+      <table>
+        <tr><td style="color:var(--muted);width:40%">아이디</td><td><b>{{ user.username }}</b></td></tr>
+        <tr><td style="color:var(--muted)">이름</td><td>{{ user.name }}</td></tr>
+        <tr><td style="color:var(--muted)">권한</td><td>{{ user.role }}</td></tr>
+        <tr><td style="color:var(--muted)">등록 발전기</td>
+          <td><b style="color:#93c5fd">{{ user_gens|join(', ') }}</b></td></tr>
+      </table>
+      <div style="margin-top:16px;padding:12px;background:rgba(59,130,246,.07);
+        border:1px solid rgba(59,130,246,.18);border-radius:8px;font-size:12px;color:var(--muted)">
+        💡 등록 발전기 변경 및 계정 관리는 시스템 관리자에게 문의하세요.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:18px">🔔 알람 설정</div>
+      <form method="post">
+        <input type="hidden" name="action" value="alarm">
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+          {% set alarms = [
+            ('alarm_output_drop','출력 저하 경보 (정격 70% 이하)'),
+            ('alarm_over_temp','냉각수 온도 경보 (90°C 초과)'),
+            ('alarm_comm_loss','통신 오류 경보'),
+            ('alarm_periodic','정기 점검 예정 알림'),
+            ('alarm_email','이메일 알림 발송'),
+            ('alarm_sms','SMS 알림 발송'),
+          ] %}
+          {% for key, label in alarms %}
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+            <input type="checkbox" name="{{ key }}" {% if settings.get(key) %}checked{% endif %}
+              style="width:15px;height:15px;accent-color:#22c55e">
+            {{ label }}
+          </label>
+          {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">💾 알람 저장</button>
+      </form>
+    </div>
+  </div>
+
+</div>
+  <!-- ─ 피크운전 부하분담 설정 ─ -->
+  <div class="card" style="grid-column:1/-1">
+    <div class="card-title" style="margin-bottom:6px">⚡ 피크운전 발전기 부하분담 설정</div>
+    <p style="font-size:11px;color:var(--muted);margin:0 0 16px">
+      피크 발생(사용전력 &gt; 목표전력) 시 발전기가 공급하는 방식을 선택합니다.
+    </p>
+    <form method="post" id="peakModeForm">
+      <input type="hidden" name="action" value="peak_mode">
+
+      <!-- 발전기 선택 & 병렬 재사용 -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+        {% for gid in user_gens %}
+        <label style="display:flex;align-items:center;gap:6px;background:#0f1117;
+          border:1px solid var(--border);border-radius:8px;padding:8px 14px;
+          cursor:pointer;font-size:13px;transition:.2s" id="pm-lbl-{{ gid }}">
+          <input type="radio" name="sel_gen" value="{{ gid }}"
+            {% if loop.first %}checked{% endif %}
+            onchange="onPMGenChange()"
+            style="accent-color:#f59e0b">
+          <span>{{ gen_names[gid] }}</span>
+          <span style="color:var(--muted);font-size:11px">({{ gid }})</span>
+        </label>
+        {% endfor %}
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;
+          font-size:12px;color:#93c5fd">
+          <input type="checkbox" name="parallel" id="pmParallelChk"
+            onchange="onPMParallelChange()"
+            style="width:15px;height:15px;accent-color:#3b82f6">
+          🔗 병렬 적용
+        </label>
+      </div>
+
+      <!-- 모드 선택 카드 2개 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px" id="modeCards">
+
+        <!-- Mode 1: 초과분 추종 -->
+        <label id="card-excess" style="border:2px solid var(--border);border-radius:12px;
+          padding:16px;cursor:pointer;transition:.25s;background:#0c0f14">
+          <input type="radio" name="peak_mode_type" value="excess"
+            {% if peak_modes[user_gens[0]] == 'excess' %}checked{% endif %}
+            onchange="onModeChange()"
+            style="accent-color:#22c55e;margin-right:8px">
+          <span style="font-weight:700;font-size:14px;color:#e2e8f0">📈 초과분 추종 모드</span>
+          <div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6">
+            사용전력 − 목표전력 = <b style="color:#22c55e">발전기 공급량</b><br>
+            나머지는 한전(KEPCO) 공급<br>
+            <span style="color:#64748b">예) 사용 600 − 목표 500 → 발전기 100kW</span>
+          </div>
+        </label>
+
+        <!-- Mode 2: 고정 부하율 -->
+        <label id="card-fixed" style="border:2px solid var(--border);border-radius:12px;
+          padding:16px;cursor:pointer;transition:.25s;background:#0c0f14">
+          <input type="radio" name="peak_mode_type" value="fixed"
+            {% if peak_modes[user_gens[0]] == 'fixed' %}checked{% endif %}
+            onchange="onModeChange()"
+            style="accent-color:#f59e0b;margin-right:8px">
+          <span style="font-weight:700;font-size:14px;color:#e2e8f0">🔒 고정 부하율 모드</span>
+          <div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6">
+            발전기 용량 × 설정 부하율 = <b style="color:#f59e0b">고정 공급량</b><br>
+            나머지는 한전(KEPCO) 공급<br>
+            <span style="color:#64748b">발전기 정지: 한전+발전기 &lt; 사용전력 시</span>
+          </div>
+        </label>
+      </div>
+
+      <!-- 고정 부하율 슬라이더 -->
+      <div id="fixedPctArea" style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);
+        border-radius:10px;padding:16px;margin-bottom:18px;
+        display:{% if peak_modes[user_gens[0]] == 'fixed' %}block{% else %}none{% endif %}">
+        <label style="font-size:12px;color:#fbbf24;font-weight:600;display:block;margin-bottom:10px">
+          🎚 발전기 가동 부하율 설정
+        </label>
+        <div style="display:flex;align-items:center;gap:12px">
+          <input type="range" name="peak_load_pct" id="pctSlider"
+            min="10" max="100" step="5"
+            value="{{ peak_load_pcts[user_gens[0]] }}"
+            oninput="onPctChange()"
+            style="flex:1;accent-color:#f59e0b">
+          <span id="pctDisplay" style="font-size:22px;font-weight:800;color:#fbbf24;
+            min-width:52px;text-align:right">
+            {{ peak_load_pcts[user_gens[0]] }}%
+          </span>
+        </div>
+      </div>
+
+      <!-- 실시간 예시 계산 -->
+      <div style="background:#0c0f14;border:1px solid var(--border);border-radius:10px;
+        padding:14px;margin-bottom:18px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;
+          text-transform:uppercase;letter-spacing:.05em">📊 피크운전 시뮬레이션 예시</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:10px">
+          <div>
+            <div style="font-size:10px;color:var(--muted)">사용전력 (예시)</div>
+            <input type="number" id="simUsage" value="600" min="100" max="9999" step="50"
+              oninput="calcSim()"
+              style="width:100%;background:#1a1d27;border:1px solid var(--border);
+                border-radius:6px;padding:6px 8px;color:var(--text);font-size:14px;
+                font-weight:700;outline:none;box-sizing:border-box">
+            <div style="font-size:10px;color:var(--muted)">kW</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--muted)">목표전력</div>
+            <div id="simTarget" style="font-size:18px;font-weight:700;color:#e2e8f0;
+              padding:6px 0">—</div>
+            <div style="font-size:10px;color:var(--muted)">kW</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:var(--muted)">발전기 용량</div>
+            <div id="simCap" style="font-size:18px;font-weight:700;color:#e2e8f0;
+              padding:6px 0">—</div>
+            <div style="font-size:10px;color:var(--muted)">kW</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:4px">
+          <div style="background:#0f1117;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:4px">발전기 공급</div>
+            <div id="simGen" style="font-size:20px;font-weight:800;color:#22c55e">—</div>
+            <div style="font-size:9px;color:var(--muted)">kW</div>
+          </div>
+          <div style="background:#0f1117;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:4px">한전 공급</div>
+            <div id="simKepco" style="font-size:20px;font-weight:800;color:#3b82f6">—</div>
+            <div style="font-size:9px;color:var(--muted)">kW</div>
+          </div>
+          <div style="background:#0f1117;border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:4px">정지 조건</div>
+            <div id="simStop" style="font-size:13px;font-weight:700">—</div>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width:100%">💾 부하분담 설정 저장</button>
+    </form>
+  </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const GEN_TARGETS = {{ gen_targets|tojson }};
+const USER_GENS   = {{ user_gens|tojson }};
+
+function getSelGen(){
+  const r = document.querySelector('input[name="sel_gen"]:checked');
+  return r ? r.value : USER_GENS[0];
+}
+
+function onGenChange(){
+  const gid = getSelGen();
+  const val  = GEN_TARGETS[gid] || 800;
+  document.getElementById('targetPeakInput').value = val;
+  // 선택된 카드 하이라이트
+  USER_GENS.forEach(g => {
+    const lbl = document.getElementById('lbl-'+g);
+    if(lbl) lbl.style.borderColor = (g===gid) ? '#3b82f6' : 'var(--border)';
+  });
+}
+
+function onParallelChange(){
+  const on = document.getElementById('parallelChk').checked;
+  // 병렬이면 라디오 비활성화 (시각적으로)
+  document.querySelectorAll('input[name="sel_gen"]').forEach(r => r.disabled = on);
+  USER_GENS.forEach(g => {
+    const lbl = document.getElementById('lbl-'+g);
+    if(lbl) lbl.style.opacity = on ? '0.4' : '1';
+  });
+}
+
+// 초기화
+onGenChange();
+
+// ─── 피크 부하분담 JS ───────────────────────────────────
+const PM_GEN_TARGETS   = {{ gen_targets|tojson }};
+const PM_GEN_CAPS      = {{ gen_caps|tojson }};
+const PM_GEN_MODES     = {{ peak_modes|tojson }};
+const PM_GEN_LOAD_PCTS = {{ peak_load_pcts|tojson }};
+
+function getPMSelGen(){
+  const r = document.querySelector('#peakModeForm input[name="sel_gen"]:checked');
+  return r ? r.value : USER_GENS[0];
+}
+
+function onPMGenChange(){
+  const gid  = getPMSelGen();
+  const mode = PM_GEN_MODES[gid] || 'excess';
+  const lp   = PM_GEN_LOAD_PCTS[gid] || 50;
+  // 모드 라디오 반영
+  document.querySelectorAll('input[name="peak_mode_type"]').forEach(r => {
+    r.checked = (r.value === mode);
+  });
+  document.getElementById('pctSlider').value = lp;
+  document.getElementById('pctDisplay').textContent = lp + '%';
+  onModeChange();
+  calcSim();
+  // 카드 하이라이트
+  USER_GENS.forEach(g => {
+    const lbl = document.getElementById('pm-lbl-'+g);
+    if(lbl) lbl.style.borderColor = (g===gid) ? '#f59e0b' : 'var(--border)';
+  });
+}
+
+function onPMParallelChange(){
+  const on = document.getElementById('pmParallelChk').checked;
+  document.querySelectorAll('#peakModeForm input[name="sel_gen"]').forEach(r => r.disabled = on);
+  USER_GENS.forEach(g => {
+    const lbl = document.getElementById('pm-lbl-'+g);
+    if(lbl) lbl.style.opacity = on ? '0.4' : '1';
+  });
+}
+
+function onModeChange(){
+  const mode = document.querySelector('input[name="peak_mode_type"]:checked')?.value || 'excess';
+  const fixedArea = document.getElementById('fixedPctArea');
+  if(fixedArea) fixedArea.style.display = (mode==='fixed') ? 'block' : 'none';
+  // 카드 테두리 강조
+  const ce = document.getElementById('card-excess');
+  const cf = document.getElementById('card-fixed');
+  if(ce) ce.style.borderColor = mode==='excess' ? '#22c55e' : 'var(--border)';
+  if(cf) cf.style.borderColor = mode==='fixed'  ? '#f59e0b' : 'var(--border)';
+  calcSim();
+}
+
+function onPctChange(){
+  const v = document.getElementById('pctSlider').value;
+  document.getElementById('pctDisplay').textContent = v + '%';
+  calcSim();
+}
+
+function calcSim(){
+  const gid    = getPMSelGen();
+  const usage  = parseInt(document.getElementById('simUsage').value) || 600;
+  const target = PM_GEN_TARGETS[gid] || 800;
+  const cap    = PM_GEN_CAPS[gid]    || 500;
+  const mode   = document.querySelector('input[name="peak_mode_type"]:checked')?.value || 'excess';
+  const lp     = parseInt(document.getElementById('pctSlider').value) || 50;
+
+  document.getElementById('simTarget').textContent = target;
+  document.getElementById('simCap').textContent    = cap;
+
+  if(usage <= target){
+    // 피크 미발생
+    document.getElementById('simGen').textContent   = '0';
+    document.getElementById('simKepco').textContent = usage;
+    document.getElementById('simStop').innerHTML    = '<span style="color:#64748b">피크 없음</span>';
+    return;
+  }
+
+  let genKw, kepcoKw, stopText;
+  if(mode === 'fixed'){
+    genKw   = Math.round(cap * lp / 100);
+    kepcoKw = usage - genKw;
+    const stopCond = (target + genKw) < usage;
+    stopText = stopCond
+      ? `<span style="color:#ef4444">⛔ 정지 (${target}+${genKw}=${target+genKw} < ${usage})</span>`
+      : `<span style="color:#22c55e">✅ 가동 (${target}+${genKw}=${target+genKw} ≥ ${usage})</span>`;
+  } else {
+    genKw   = Math.min(usage - target, cap);
+    kepcoKw = usage - genKw;
+    stopText = '<span style="color:#22c55e">✅ 추종 유지</span>';
+  }
+  document.getElementById('simGen').textContent   = genKw;
+  document.getElementById('simKepco').textContent = kepcoKw;
+  document.getElementById('simStop').innerHTML    = stopText;
+}
+
+// 초기화
+document.addEventListener('DOMContentLoaded', ()=>{
+  onModeChange();
+  calcSim();
+  onGenChange();
+  onPMGenChange();
+});
+
+</script>
+{% endblock %}

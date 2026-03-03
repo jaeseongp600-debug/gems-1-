@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block title %}전체 대시보드{% endblock %}
+{% block title_bar %}⚡ 전체 대시보드{% endblock %}
+
+{% block content %}
+
+<!-- 발전기 카드 그리드 -->
+<p style="font-size:13px;color:var(--muted);margin-bottom:18px">
+  등록된 발전기 <b style="color:var(--text)">{{ generators|length }}대</b> · 카드를 클릭하면 상세 모니터링으로 이동합니다
+</p>
+
+<div class="gen-grid" id="genGrid">
+{% for g in generators %}
+{% set sk = g.status_key %}
+{% set badge_cls = 'badge-'+sk %}
+{% set card_cls  = sk %}
+<div class="gen-card {{ card_cls }}" onclick="location.href='/generator/{{ g.id }}'"
+     data-id="{{ g.id }}" id="card-{{ g.id }}">
+
+  <div class="gen-card-top">
+    <div>
+      <div class="gen-card-id">{{ g.id }}</div>
+      <div class="gen-card-name">{{ g.name }}</div>
+      <div class="gen-card-site">📍 {{ g.site }}</div>
+      <!-- 발전기 용량 배지 -->
+      <div style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;
+        background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.25);
+        border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;color:#93c5fd">
+        🔋 {{ g.capacity }} kW
+      </div>
+    </div>
+    <!-- Ring gauge -->
+    <div class="ring-wrap">
+      <svg width="88" height="88" viewBox="0 0 88 88">
+        <circle cx="44" cy="44" r="36" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="7"/>
+        {% set r=36 %}
+        {% set circ = (r * 3.14159 * 2)|round(1) %}
+        {% set pct_val = g.load_pct if g.load_pct else 0 %}
+        {% set dash = (pct_val/100 * circ)|round(1) %}
+        {% set color = '#22c55e' if sk=='running' else ('#f59e0b' if sk=='peak' else ('#ef4444' if sk=='warn' else '#475569')) %}
+        <circle cx="44" cy="44" r="{{ r }}" fill="none"
+          stroke="{{ color }}" stroke-width="7"
+          stroke-dasharray="{{ dash }} {{ circ }}"
+          stroke-linecap="round"/>
+      </svg>
+      <div class="ring-center">
+        <div class="pct" style="color:{{ '#22c55e' if sk=='running' else ('#f59e0b' if sk=='peak' else ('#ef4444' if sk=='warn' else '#475569')) }}">
+          {{ g.load_pct }}%</div>
+        <div class="lbl">부하율</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="gen-power" id="pw-{{ g.id }}">
+    {{ g.power }} <span>kW</span>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+    <span class="gen-status-badge {{ badge_cls }}" id="st-{{ g.id }}">
+      {{ '🟢' if sk=='running' else ('🔶' if sk=='peak' else ('🔴' if sk=='warn' else ('⚫' if sk=='stop' else '⚪'))) }}
+      {{ g.status }}
+    </span>
+    <span style="font-size:11px;color:var(--muted)">{{ g.type }} · {{ g.capacity }}kW</span>
+  </div>
+
+  <!-- 미니 프로그레스 -->
+  <div style="margin-top:12px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+      <span>효율 {{ g.efficiency }}%</span>
+      <span>🌡 {{ g.temperature }}°C</span>
+    </div>
+    <div class="prog">
+      <div class="prog-bar" id="eff-{{ g.id }}"
+        style="width:{{ g.efficiency }}%;background:{{ '#22c55e' if g.efficiency>80 else '#f59e0b' }}"></div>
+    </div>
+  </div>
+
+  {% if g.fuel_level %}
+  <div style="margin-top:8px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+      <span>🛢 연료잔량</span><span>{{ g.fuel_level }}%</span>
+    </div>
+    <div class="prog">
+      <div class="prog-bar"
+        style="width:{{ g.fuel_level }}%;background:{{ '#ef4444' if g.fuel_level<30 else ('#f59e0b' if g.fuel_level<50 else '#22c55e') }}"></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div style="margin-top:14px;text-align:right">
+    <span style="font-size:11px;color:var(--muted2)">클릭하여 상세 보기 →</span>
+  </div>
+</div>
+{% endfor %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── 실시간 카드 갱신 (3초) ──────────────
+const SK_CLS  = {running:'badge-running',peak:'badge-peak',warn:'badge-warn',stop:'badge-stop',idle:'badge-idle'};
+const SK_ICON = {running:'🟢',peak:'🔶',warn:'🔴',stop:'⚫',idle:'⚪'};
+const CARD_CLS= {running:'running',peak:'peak',warn:'warn',stop:'stop',idle:'idle'};
+
+function refreshCards(){
+  fetch('/api/realtime')
+    .then(r=>r.json())
+    .then(d=>{
+      d.generators.forEach(g=>{
+        // 전력값
+        const pw=document.getElementById('pw-'+g.id);
+        if(pw) pw.innerHTML=`${g.power} <span>kW</span>`;
+        // 상태 배지
+        const st=document.getElementById('st-'+g.id);
+        if(st){
+          st.className='gen-status-badge '+(SK_CLS[g.status_key]||'badge-idle');
+          st.textContent=(SK_ICON[g.status_key]||'⚪')+' '+g.status;
+        }
+      });
+    }).catch(()=>{});
+}
+setInterval(refreshCards,3000);
+</script>
+{% endblock %}

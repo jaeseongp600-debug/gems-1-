@@ -1,0 +1,529 @@
+{% extends 'base.html' %}
+{% block title %}발전기 보고서{% endblock %}
+{% block title_bar %}📋 발전기 보고서{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:260px 1fr;gap:20px;align-items:start">
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       왼쪽: 발전기 선택 + 보고서 선택
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div style="position:sticky;top:80px;display:flex;flex-direction:column;gap:14px">
+
+    <!-- 발전기 선택 카드 -->
+    <div style="background:#1a1f2e;border:1px solid #2d3448;border-radius:12px;padding:16px">
+      <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px">발전기 선택</div>
+      {% for g in gens %}
+      <a href="/report/{{ g.id }}"
+         style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;
+                border:1px solid {{ '#22c55e40' if selected_gen and g.id==selected_gen.id else '#2d3448' }};
+                background:{{ 'rgba(34,197,94,.07)' if selected_gen and g.id==selected_gen.id else 'transparent' }};
+                text-decoration:none;margin-bottom:6px;transition:.15s"
+         onmouseover="this.style.borderColor='#3b82f640';this.style.background='rgba(59,130,246,.04)'"
+         onmouseout="this.style.borderColor='{{ '#22c55e40' if selected_gen and g.id==selected_gen.id else '#2d3448' }}';
+                     this.style.background='{{ 'rgba(34,197,94,.07)' if selected_gen and g.id==selected_gen.id else 'transparent' }}'">
+        <span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;
+          background:{{ '#22c55e' if g.status_key in ('running','peak') else ('#ef4444' if g.status_key=='warn' else '#475569') }};
+          box-shadow:0 0 6px {{ '#22c55e' if g.status_key in ('running','peak') else ('#ef4444' if g.status_key=='warn' else 'transparent') }}">
+        </span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:700;color:#e2e8f0;
+                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.name }}</div>
+          <div style="font-size:10px;color:#64748b">{{ g.site }} · {{ g.capacity }} kW</div>
+        </div>
+        {% if selected_gen and g.id==selected_gen.id %}
+        <span style="font-size:10px;color:#4ade80;font-weight:700">선택됨</span>
+        {% endif %}
+      </a>
+      {% endfor %}
+    </div>
+
+    <!-- 보고서 종류 선택 카드 -->
+    <div style="background:#1a1f2e;border:1px solid #2d3448;border-radius:12px;padding:16px">
+      <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;
+                  letter-spacing:.06em;margin-bottom:10px">보고서 선택</div>
+
+      <label id="lbl-operable"
+             style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;
+                    border-radius:8px;border:1px solid #22c55e40;background:rgba(34,197,94,.05);
+                    cursor:pointer;margin-bottom:8px;transition:.15s">
+        <input type="checkbox" id="chk-operable" checked
+               style="margin-top:2px;width:15px;height:15px;accent-color:#22c55e;flex-shrink:0">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#e2e8f0">① 가동(점검) 가능 여부</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px">유압·온도·연료·전압·정비 이력 판단</div>
+        </div>
+      </label>
+
+      <label id="lbl-history"
+             style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;
+                    border-radius:8px;border:1px solid #3b82f640;background:rgba(59,130,246,.05);
+                    cursor:pointer;margin-bottom:14px;transition:.15s">
+        <input type="checkbox" id="chk-history" checked
+               style="margin-top:2px;width:15px;height:15px;accent-color:#3b82f6;flex-shrink:0">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#e2e8f0">② 누적 가동 보고서</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px">30일 운전 이력·피크·누적 발전량</div>
+        </div>
+      </label>
+
+      <button onclick="loadReport()"
+        style="width:100%;padding:10px;border-radius:8px;border:1px solid #22c55e;
+               background:rgba(34,197,94,.12);color:#4ade80;font-size:13px;font-weight:700;
+               cursor:pointer;transition:.15s;margin-bottom:8px"
+        onmouseover="this.style.background='rgba(34,197,94,.22)'"
+        onmouseout="this.style.background='rgba(34,197,94,.12)'">
+        🔍 보고서 조회
+      </button>
+
+      <button onclick="printReport()" id="btn-print"
+        style="width:100%;padding:10px;border-radius:8px;border:1px solid #3b82f6;
+               background:rgba(59,130,246,.1);color:#60a5fa;font-size:13px;font-weight:700;
+               cursor:pointer;transition:.15s;display:none"
+        onmouseover="this.style.background='rgba(59,130,246,.2)'"
+        onmouseout="this.style.background='rgba(59,130,246,.1)'">
+        🖨️ PDF 출력
+      </button>
+    </div>
+  </div>
+
+  <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+       오른쪽: 보고서 결과 영역
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div id="report-area">
+
+    <!-- 초기 안내 -->
+    <div id="rpt-empty"
+         style="display:flex;flex-direction:column;align-items:center;justify-content:center;
+                min-height:400px;color:#64748b;text-align:center;
+                background:#1a1f2e;border:1px solid #2d3448;border-radius:12px">
+      <div style="font-size:48px;margin-bottom:16px">📋</div>
+      <div style="font-size:15px;font-weight:700;color:#94a3b8;margin-bottom:8px">보고서를 선택하고 조회하세요</div>
+      <div style="font-size:12px">왼쪽에서 발전기와 보고서 종류를 선택한 후<br>「🔍 보고서 조회」 버튼을 눌러주세요.</div>
+    </div>
+
+    <!-- 로딩 -->
+    <div id="rpt-loading"
+         style="display:none;flex-direction:column;align-items:center;justify-content:center;
+                min-height:400px;color:#64748b;
+                background:#1a1f2e;border:1px solid #2d3448;border-radius:12px">
+      <div style="font-size:32px;animation:spin 1s linear infinite;margin-bottom:14px">⏳</div>
+      <div style="font-size:13px">보고서 데이터 불러오는 중...</div>
+    </div>
+
+    <!-- 결과 -->
+    <div id="rpt-result" style="display:none;flex-direction:column;gap:16px">
+
+      <!-- ─ 공통 헤더 ─ -->
+      <div style="background:#1a1f2e;border:1px solid #2d3448;border-radius:12px;padding:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div>
+            <div style="font-size:16px;font-weight:700;color:#e2e8f0" id="rh-name">-</div>
+            <div style="font-size:11px;color:#64748b;margin-top:3px" id="rh-sub">-</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:10px;color:#64748b">보고서 생성 일시</div>
+            <div style="font-size:12px;font-weight:600;color:#94a3b8" id="rh-date">-</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <div style="background:#141824;border-radius:8px;padding:10px">
+            <div style="font-size:10px;color:#64748b;margin-bottom:3px">기종</div>
+            <div style="font-size:12px;font-weight:700;color:#e2e8f0" id="rh-type">-</div>
+          </div>
+          <div style="background:#141824;border-radius:8px;padding:10px">
+            <div style="font-size:10px;color:#64748b;margin-bottom:3px">정격용량</div>
+            <div style="font-size:12px;font-weight:700;color:#e2e8f0" id="rh-cap">-</div>
+          </div>
+          <div style="background:#141824;border-radius:8px;padding:10px">
+            <div style="font-size:10px;color:#64748b;margin-bottom:3px">다음 정비</div>
+            <div style="font-size:12px;font-weight:700;color:#e2e8f0" id="rh-maint">-</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─ ① 가동 가능 여부 ─ -->
+      <div id="sec-operable" style="display:none;background:#1a1f2e;border:1px solid #2d3448;
+                                     border-radius:12px;padding:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
+                    padding-bottom:12px;border-bottom:1px solid #2d3448">
+          <span style="display:inline-block;width:4px;height:18px;background:#22c55e;border-radius:2px"></span>
+          <span style="font-size:14px;font-weight:700;color:#e2e8f0">① 발전기 가동(점검) 가능 여부</span>
+        </div>
+
+        <!-- 종합 판정 배너 -->
+        <div id="verdict-box"
+             style="border-radius:10px;padding:18px;text-align:center;margin-bottom:16px;border:2px solid">
+          <div style="font-size:36px;margin-bottom:6px" id="verdict-icon">-</div>
+          <div style="font-size:18px;font-weight:800;margin-bottom:4px" id="verdict-title">-</div>
+          <div style="font-size:12px" id="verdict-reason">-</div>
+        </div>
+
+        <!-- 점검 항목 -->
+        <div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;
+                    letter-spacing:.05em;margin-bottom:8px">세부 점검 항목</div>
+        <div id="checks-list" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+
+      <!-- ─ ② 누적 가동 보고서 ─ -->
+      <div id="sec-history" style="display:none;background:#1a1f2e;border:1px solid #2d3448;
+                                    border-radius:12px;padding:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;
+                    padding-bottom:12px;border-bottom:1px solid #2d3448">
+          <span style="display:inline-block;width:4px;height:18px;background:#3b82f6;border-radius:2px"></span>
+          <span style="font-size:14px;font-weight:700;color:#e2e8f0">② 발전기 누적 가동 보고서 (최근 30일)</span>
+        </div>
+
+        <!-- 요약 4개 카드 -->
+        <div id="summary-cards"
+             style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px"></div>
+
+        <!-- 유류비 총계 박스 (디젤 발전기만 표시) -->
+        <div id="fuel-summary-box" style="display:none;background:linear-gradient(135deg,rgba(251,146,60,.1),rgba(244,63,94,.1));
+          border:1px solid rgba(251,146,60,.35);border-radius:10px;padding:14px 18px;margin-bottom:16px">
+          <div style="font-size:11px;color:#fb923c;font-weight:700;margin-bottom:10px;letter-spacing:.04em">
+            ⛽ 유류 운영 비용 요약 (오피넷 경유가 기준)
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+            <div style="text-align:center">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:4px">연비</div>
+              <div id="fs-rate" style="font-size:18px;font-weight:800;color:#fb923c">-</div>
+              <div style="font-size:10px;color:#64748b">L/h</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:4px">30일 총 연료 사용</div>
+              <div id="fs-liter" style="font-size:18px;font-weight:800;color:#fb923c">-</div>
+              <div style="font-size:10px;color:#64748b">L</div>
+            </div>
+            <div style="text-align:center;border-left:1px solid rgba(251,146,60,.25)">
+              <div style="font-size:10px;color:#94a3b8;margin-bottom:4px">30일 총 유류금액</div>
+              <div id="fs-cost" style="font-size:20px;font-weight:900;color:#f43f5e">-</div>
+              <div style="font-size:10px;color:#64748b">원</div>
+            </div>
+          </div>
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(251,146,60,.2);
+            font-size:10px;color:#64748b;text-align:right">
+            📌 평균 경유가 <span id="fs-avg-price" style="color:#fb923c;font-weight:700">-</span>원/L
+            · 출처: 오피넷(opinet.co.kr)
+          </div>
+        </div>
+
+        <!-- 차트 -->
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:8px">일별 가동 시간</div>
+          <canvas id="histChart" style="max-height:180px"></canvas>
+        </div>
+
+        <!-- 이력 테이블 -->
+        <div style="font-size:11px;color:#64748b;font-weight:700;margin-bottom:8px">일별 상세 이력</div>
+        <div style="border-radius:8px;border:1px solid #2d3448;overflow:hidden">
+          <div style="overflow-x:auto;max-height:340px;overflow-y:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:420px">
+              <thead style="position:sticky;top:0;z-index:1">
+                <tr style="background:#141824">
+                  <th style="padding:8px 12px;text-align:left;color:#64748b;font-weight:600;
+                              border-bottom:1px solid #2d3448">날짜</th>
+                  <th style="padding:8px 12px;text-align:right;color:#64748b;font-weight:600;
+                              border-bottom:1px solid #2d3448">가동(h)</th>
+                  <th style="padding:8px 12px;text-align:right;color:#64748b;font-weight:600;
+                              border-bottom:1px solid #2d3448">피크(h)</th>
+                  <th style="padding:8px 12px;text-align:right;color:#64748b;font-weight:600;
+                              border-bottom:1px solid #2d3448">발전량(kWh)</th>
+                  <th id="hist-th-fuel" style="padding:8px 12px;text-align:right;color:#fb923c;font-weight:600;
+                              border-bottom:1px solid #2d3448">연료(L)</th>
+                  <th id="hist-th-price" style="padding:8px 12px;text-align:right;color:#fb923c;font-weight:600;
+                              border-bottom:1px solid #2d3448">유가(원/L)</th>
+                  <th id="hist-th-cost" style="padding:8px 12px;text-align:right;color:#f43f5e;font-weight:700;
+                              border-bottom:1px solid #2d3448">유류금액(원)</th>
+                  <th style="padding:8px 12px;text-align:center;color:#64748b;font-weight:600;
+                              border-bottom:1px solid #2d3448">상태</th>
+                </tr>
+              </thead>
+              <tbody id="hist-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /rpt-result -->
+  </div><!-- /report-area -->
+
+</div><!-- /grid -->
+
+<!-- ══ 인쇄 전용 숨김 영역 ══ -->
+<div id="print-area" style="display:none"></div>
+
+<style>
+@keyframes spin{ to{transform:rotate(360deg)} }
+@media print{
+  body > *:not(#print-area){ display:none !important; }
+  #print-area{
+    display:block !important;
+    font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+    color:#000;background:#fff;padding:24px;font-size:12px;
+  }
+  #print-area h1{ font-size:18px;margin-bottom:4px;color:#1e3a5f }
+  #print-area h2{ font-size:14px;margin:18px 0 8px;color:#1e3a5f;
+                  border-left:4px solid #1e3a5f;padding-left:8px }
+  #print-area table{ border-collapse:collapse;width:100%;margin-bottom:16px }
+  #print-area th,#print-area td{ border:1px solid #ccc;padding:6px 8px }
+  #print-area th{ background:#eef2ff }
+  .page-break{ page-break-before:always }
+}
+</style>
+
+<script>
+const GEN_ID_REPORT = '{{ selected_gen.id if selected_gen else "" }}';
+let reportData = null;
+let histChartObj = null;
+
+// 체크박스 라벨 스타일 토글
+document.getElementById('chk-operable').addEventListener('change', function(){
+  const lbl = document.getElementById('lbl-operable');
+  lbl.style.borderColor = this.checked ? '#22c55e40' : '#2d3448';
+  lbl.style.background  = this.checked ? 'rgba(34,197,94,.05)' : 'transparent';
+});
+document.getElementById('chk-history').addEventListener('change', function(){
+  const lbl = document.getElementById('lbl-history');
+  lbl.style.borderColor = this.checked ? '#3b82f640' : '#2d3448';
+  lbl.style.background  = this.checked ? 'rgba(59,130,246,.05)' : 'transparent';
+});
+
+function loadReport(){
+  if(!GEN_ID_REPORT){ toast('발전기를 먼저 선택해주세요.','#ef4444'); return; }
+  const showOp   = document.getElementById('chk-operable').checked;
+  const showHist = document.getElementById('chk-history').checked;
+  if(!showOp && !showHist){ toast('보고서를 하나 이상 선택해주세요.','#ef4444'); return; }
+
+  document.getElementById('rpt-empty').style.display   = 'none';
+  document.getElementById('rpt-loading').style.display = 'flex';
+  document.getElementById('rpt-result').style.display  = 'none';
+
+  fetch(`/api/report/${GEN_ID_REPORT}`)
+    .then(r=>r.json())
+    .then(d=>{
+      if(!d.ok) throw new Error(d.error||'오류');
+      reportData = d;
+      renderReport(d, showOp, showHist);
+      document.getElementById('rpt-loading').style.display = 'none';
+      document.getElementById('rpt-result').style.display  = 'flex';
+      document.getElementById('btn-print').style.display   = 'block';
+    })
+    .catch(e=>{
+      document.getElementById('rpt-loading').style.display = 'none';
+      document.getElementById('rpt-empty').style.display   = 'flex';
+      toast('보고서 로드 실패: '+e.message,'#ef4444');
+    });
+}
+
+function renderReport(d, showOp, showHist){
+  // ── 공통 헤더 ──
+  document.getElementById('rh-name').textContent  = d.gen_name;
+  document.getElementById('rh-sub').textContent   = d.gen_site + ' · 모델: ' + d.model;
+  document.getElementById('rh-date').textContent  = d.generated_at;
+  document.getElementById('rh-type').textContent  = d.gen_type;
+  document.getElementById('rh-cap').textContent   = d.capacity + ' kW';
+  document.getElementById('rh-maint').textContent = d.next_maint;
+
+  // ── ① 가동 가능 여부 ──
+  const secOp = document.getElementById('sec-operable');
+  secOp.style.display = showOp ? 'block' : 'none';
+  if(showOp){
+    const box    = document.getElementById('verdict-box');
+    const icon   = document.getElementById('verdict-icon');
+    const title  = document.getElementById('verdict-title');
+    const reason = document.getElementById('verdict-reason');
+    if(d.operable){
+      box.style.borderColor = '#22c55e44'; box.style.background = 'rgba(34,197,94,.07)';
+      icon.textContent  = '✅';
+      title.textContent = '가동 가능'; title.style.color = '#4ade80';
+      reason.textContent = '모든 점검 항목 정상 — 즉시 가동 가능합니다.'; reason.style.color='#86efac';
+    } else {
+      box.style.borderColor = '#ef444444'; box.style.background = 'rgba(239,68,68,.07)';
+      icon.textContent  = '⚠️';
+      title.textContent = '가동 불가 / 점검 필요'; title.style.color = '#f87171';
+      reason.textContent = '이상 항목: ' + d.reason; reason.style.color='#fca5a5';
+    }
+
+    const list = document.getElementById('checks-list');
+    list.innerHTML = '';
+    d.checks.forEach(c => {
+      list.innerHTML += `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;
+                    background:${c.ok?'rgba(34,197,94,.05)':'rgba(239,68,68,.07)'};
+                    border:1px solid ${c.ok?'rgba(34,197,94,.18)':'rgba(239,68,68,.3)'}">
+          <span style="font-size:18px;flex-shrink:0">${c.ok?'✅':'❌'}</span>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:700;color:${c.ok?'#4ade80':'#f87171'}">${c.name}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:1px">측정값: <b>${c.value}</b> &nbsp;|&nbsp; 기준: ${c.limit}</div>
+          </div>
+          <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;
+                       background:${c.ok?'rgba(34,197,94,.15)':'rgba(239,68,68,.2)'};
+                       color:${c.ok?'#4ade80':'#f87171'}">${c.ok?'정상':'이상'}</span>
+        </div>`;
+    });
+  }
+
+  // ── ② 누적 가동 보고서 ──
+  const secHist = document.getElementById('sec-history');
+  secHist.style.display = showHist ? 'block' : 'none';
+  if(showHist){
+    const s = d.summary;
+    const cards = [
+      {label:'총 가동 시간',   val: s.total_run_hours+'h',             color:'#3b82f6'},
+      {label:'피크 가동 시간', val: s.total_peak_hours+'h',            color:'#22c55e'},
+      {label:'총 발전량',      val: s.total_kwh.toLocaleString()+' kWh',color:'#f59e0b'},
+      {label:'가동일 / 30일',  val: s.op_days+'일',                    color:'#a78bfa'},
+      {label:'총 유류 사용량', val: (s.gen_type==='디젤'?s.total_fuel_liter+'L':'가스(해당없음)'), color:'#fb923c'},
+      {label:'총 유류금액',    val: (s.gen_type==='디젤'?'₩'+s.total_fuel_cost.toLocaleString():'가스(해당없음)'), color:'#f43f5e'},
+    ];
+    document.getElementById('summary-cards').innerHTML = cards.map(c=>`
+      <div style="background:#141824;border:1px solid #2d3448;border-radius:10px;padding:14px;
+                  border-top:3px solid ${c.color}">
+        <div style="font-size:10px;color:#64748b;margin-bottom:5px">${c.label}</div>
+        <div style="font-size:20px;font-weight:800;color:${c.color}">${c.val}</div>
+      </div>`).join('');
+
+    // 차트
+    const labels = d.history.map(h=>h.date.slice(5));
+    const runData  = d.history.map(h=>h.run_hours);
+    const peakData = d.history.map(h=>h.peak_hours);
+    if(histChartObj) histChartObj.destroy();
+    histChartObj = new Chart(document.getElementById('histChart'), {
+      type:'bar',
+      data:{
+        labels,
+        datasets:[
+          {label:'가동 시간',type:'bar',data:runData, backgroundColor:'rgba(59,130,246,.5)',
+           borderColor:'#3b82f6',borderWidth:1,borderRadius:3},
+          {label:'피크 가동',type:'bar',data:peakData,backgroundColor:'rgba(34,197,94,.6)',
+           borderColor:'#22c55e',borderWidth:1,borderRadius:3},
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:true,
+        plugins:{legend:{position:'top',labels:{font:{size:11},color:'#94a3b8'}}},
+        scales:{
+          x:{ticks:{font:{size:9},maxRotation:45,color:'#64748b'},grid:{color:'rgba(45,52,72,.5)'}},
+          y:{ticks:{font:{size:10},color:'#64748b'},grid:{color:'rgba(45,52,72,.5)'},
+             title:{display:true,text:'시간(h)',color:'#64748b',font:{size:10}}}
+        }
+      }
+    });
+
+    // 테이블
+    const isFuelGen = (s.gen_type === '디젤');
+    // 헤더 콜럼 표시/숨김
+    ['hist-th-fuel','hist-th-price','hist-th-cost'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.style.display = isFuelGen ? '' : 'none';
+    });
+    // 유류비 요약 박스 채우기
+    const fuelBox = document.getElementById('fuel-summary-box');
+    if(fuelBox){
+      fuelBox.style.display = isFuelGen ? 'block' : 'none';
+      if(isFuelGen){
+        const el_r = document.getElementById('fs-rate');
+        const el_l = document.getElementById('fs-liter');
+        const el_c = document.getElementById('fs-cost');
+        const el_a = document.getElementById('fs-avg-price');
+        if(el_r) el_r.textContent = (s.fuel_rate||0) + ' L/h';
+        if(el_l) el_l.textContent = (s.total_fuel_liter||0).toLocaleString();
+        if(el_c) el_c.textContent = '₩' + (s.total_fuel_cost||0).toLocaleString();
+        if(el_a) el_a.textContent = (s.avg_diesel_price||0).toLocaleString();
+      }
+    }
+    const tbody = document.getElementById('hist-tbody');
+    tbody.innerHTML = '';
+    d.history.forEach(h=>{
+      const on = h.run_hours > 0;
+      tbody.innerHTML += `
+        <tr style="border-bottom:1px solid #1e2d40;${on?'':'opacity:.45'}">
+          <td style="padding:7px 12px;color:#94a3b8">${h.date}</td>
+          <td style="padding:7px 12px;text-align:right;color:#60a5fa;font-weight:700">${h.run_hours}</td>
+          <td style="padding:7px 12px;text-align:right;color:#4ade80;font-weight:700">${h.peak_hours}</td>
+          <td style="padding:7px 12px;text-align:right;color:#fbbf24;font-weight:700">${h.kwh.toLocaleString()}</td>
+          ${isFuelGen ? `
+          <td style="padding:7px 12px;text-align:right;color:#fb923c;font-weight:600">${h.fuel_liter > 0 ? h.fuel_liter+'L' : '-'}</td>
+          <td style="padding:7px 12px;text-align:right;color:#fb923c;font-size:11px">${h.diesel_price > 0 ? h.diesel_price+'\uc6d0/L' : '-'}</td>
+          <td style="padding:7px 12px;text-align:right;color:#f43f5e;font-weight:700">${h.fuel_cost > 0 ? '\u20a9'+h.fuel_cost.toLocaleString() : '-'}</td>
+          ` : ''}
+          <td style="padding:7px 12px;text-align:center">
+            <span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;
+              background:${on?'rgba(59,130,246,.15)':'rgba(71,85,105,.15)'};
+              color:${on?'#60a5fa':'#64748b'}">${h.status}</span>
+          </td>
+        </tr>`;
+    });
+  }
+}
+
+// ── PDF 출력 ──
+function printReport(){
+  if(!reportData){ toast('먼저 보고서를 조회해주세요.','#f59e0b'); return; }
+  const d          = reportData;
+  const showOp     = document.getElementById('chk-operable').checked;
+  const showHist   = document.getElementById('chk-history').checked;
+
+  let html = `
+    <h1>📋 발전기 보고서</h1>
+    <p style="color:#555;font-size:11px;margin-bottom:16px">생성 일시: ${d.generated_at}</p>
+    <table>
+      <tr><th>발전기명</th><td>${d.gen_name}</td><th>설치 사이트</th><td>${d.gen_site}</td></tr>
+      <tr><th>기종</th><td>${d.gen_type}</td><th>정격용량</th><td>${d.capacity} kW</td></tr>
+      <tr><th>모델</th><td>${d.model}</td><th>다음 정비</th><td>${d.next_maint}</td></tr>
+    </table>`;
+
+  if(showOp){
+    const ok = d.operable;
+    html += `
+      <h2>① 발전기 가동(점검) 가능 여부</h2>
+      <table>
+        <tr>
+          <th colspan="4" style="text-align:center;background:${ok?'#f0fdf4':'#fff1f1'};
+              color:${ok?'#166534':'#991b1b'};font-size:14px;padding:10px">
+            ${ok?'✅ 가동 가능':'⚠️ 가동 불가 / 점검 필요'} — ${d.reason}
+          </th>
+        </tr>
+        <tr><th>점검 항목</th><th>측정값</th><th>기준</th><th>결과</th></tr>
+        ${d.checks.map(c=>`
+        <tr>
+          <td>${c.name}</td>
+          <td style="text-align:center">${c.value}</td>
+          <td style="text-align:center">${c.limit}</td>
+          <td style="text-align:center;font-weight:700;color:${c.ok?'green':'red'}">${c.ok?'정상':'이상'}</td>
+        </tr>`).join('')}
+      </table>`;
+  }
+
+  if(showHist){
+    const s = d.summary;
+    html += `
+      <div ${showOp?'class="page-break"':''}></div>
+      <h2>② 발전기 누적 가동 보고서 (최근 30일)</h2>
+      <table>
+        <tr><th>총 가동 시간</th><td>${s.total_run_hours} h</td>
+            <th>피크 가동 시간</th><td>${s.total_peak_hours} h</td></tr>
+        <tr><th>총 발전량</th><td>${s.total_kwh.toLocaleString()} kWh</td>
+            <th>가동일 수</th><td>${s.op_days}일 / 30일</td></tr>
+      </table>
+      <h2 style="margin-top:14px">일별 가동 이력</h2>
+      <table>
+        <tr><th>날짜</th><th>가동(h)</th><th>피크(h)</th><th>발전량(kWh)</th>${isFuelGen?'<th>연료(L)</th><th>유가(원/L)</th><th>유류금액(원)</th>':''}<th>상태</th></tr>
+        ${d.history.map(h=>`
+        <tr>
+          <td>${h.date}</td>
+          <td style="text-align:right">${h.run_hours}</td>
+          <td style="text-align:right">${h.peak_hours}</td>
+          <td style="text-align:right">${h.kwh.toLocaleString()}</td>
+          <td style="text-align:center">${h.status}</td>
+        </tr>`).join('')}
+      </table>`;
+  }
+
+  document.getElementById('print-area').innerHTML = html;
+  window.print();
+}
+</script>
+{% endblock %}

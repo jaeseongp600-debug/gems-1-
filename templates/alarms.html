@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}알람 관리{% endblock %}
+{% block title_bar %}🔔 알람 관리{% endblock %}
+
+{% block content %}
+<div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+  <button class="btn" onclick="fil('all',this)" style="border-color:var(--blue);color:var(--blue)">전체 ({{ alarms|length }})</button>
+  <button class="btn" onclick="fil('경고',this)">🔴 경고 ({{ alarms|selectattr('level','eq','경고')|list|length }})</button>
+  <button class="btn" onclick="fil('주의',this)">🟡 주의 ({{ alarms|selectattr('level','eq','주의')|list|length }})</button>
+  <button class="btn" onclick="fil('정상',this)">🟢 정상 ({{ alarms|selectattr('level','eq','정상')|list|length }})</button>
+</div>
+<div class="card">
+  <div style="overflow-x:auto">
+    <table id="tbl">
+      <thead>
+        <tr><th>수준</th><th>발전기</th><th>내용</th><th>발생시간</th><th>확인</th><th></th></tr>
+      </thead>
+      <tbody>
+      {% for a in alarms %}
+      <tr data-lv="{{ a.level }}" id="r{{ loop.index }}">
+        <td><span class="gen-status-badge {% if a.level=='경고' %}badge-warn{% elif a.level=='주의' %}badge-peak{% else %}badge-running{% endif %}">
+          {{ '🔴' if a.level=='경고' else ('🟡' if a.level=='주의' else '🟢') }} {{ a.level }}</span></td>
+        <td><code style="color:#93c5fd">{{ a.gen_id }}</code><br>
+          <span style="font-size:11px;color:var(--muted)">{{ a.gen_name }}</span></td>
+        <td>{{ a.msg }}</td>
+        <td style="font-size:12px;color:var(--muted)">{{ a.time }}</td>
+        <td><span class="gen-status-badge {% if a.ack %}badge-running{% else %}badge-peak{% endif %}">
+          {{ '✅ 확인' if a.ack else '⏳ 미확인' }}</span></td>
+        <td>{% if not a.ack %}<button class="btn" style="padding:4px 10px;font-size:11px"
+          onclick="ack({{ loop.index }},this)">확인처리</button>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function fil(lv,btn){
+  document.querySelectorAll('#tbl tbody tr').forEach(r=>{
+    r.style.display=(lv==='all'||r.dataset.lv===lv)?'':'none';
+  });
+  document.querySelectorAll('.btn').forEach(b=>{b.style.borderColor='';b.style.color='';});
+  btn.style.borderColor='var(--blue)';btn.style.color='var(--blue)';
+}
+function ack(i,btn){
+  const r=document.getElementById('r'+i);
+  r.cells[4].innerHTML='<span class="gen-status-badge badge-running">✅ 확인</span>';
+  btn.parentElement.innerHTML='';
+  toast('알람이 확인 처리되었습니다.');
+}
+</script>
+{% endblock %}
